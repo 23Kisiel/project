@@ -1,0 +1,96 @@
+############# STEP 1
+############# LOADING THE DATASET
+import pandas as pd
+import numpy as np
+import re, nltk
+import csv
+
+'''do klasyfikacji zdań'''
+from sklearn.feature_extraction.text import CountVectorizer #Convert a collection of text documents to a matrix of token counts
+from nltk.stem.porter import PorterStemmer # A processing interface for removing morphological affixes from words. This process is known as stemming.
+# from sklearn.cross_validation import train_test_split # Działa w Anakondzie
+from sklearn.model_selection import train_test_split # Split arrays or matrices into random train and test subsets
+from sklearn.linear_model import LogisticRegression # Logistic Regression
+from sklearn.metrics import classification_report # Build a text report showing the main classification metrics
+from collections import Counter #This module implements specialized container datatypes providing alternatives to Python’s general purpose built-in containers
+
+test_data_file_name='Test_1.txt' #koduje plik testowy z przykładowymi zdaniami. Musi być w tym samym folderze co plik pythona (kod pierwotny)
+train_data_file_name='Train_1.txt'    #plik do uczneia komputera
+test_data_df = pd.read_csv(test_data_file_name, header=None, delimiter=";")  #czytanie pliku CSV. delimiter mówi czym rodzieloby jest tekst
+test_data_df.columns = ["Text"]   #cztanie kolumny 'tekst' w dokumencie
+train_data_df = pd.read_csv(train_data_file_name, header=0, delimiter=";")
+train_data_df.columns = ["Id","TypeText","Text","Type"]
+TypeText=['sad','happy','nothoing'] #definiuje kategorie klasyfikacji zdań dla komputera
+##########STEP 2
+train_data_df.head(8) # pierwsze 14 zdań (czyli od 0 do 14) uczą komputer rozpoznawać emocje zdania
+train_data_df.shape    # zwraca wielkość pliku train
+test_data_df   # zwraca plik test'''
+
+############# STEP 3
+np.mean([len(s.split(" ")) for s in train_data_df.Text])
+
+stemmer = PorterStemmer()
+
+def stem_tokens(tokens, stemmer):
+    stemmed = []
+    for item in tokens:
+        stemmed.append(stemmer.stem(item))
+    return stemmed
+
+def tokenize(text):
+    text = re.sub("[^a-zA-Z]", " ", text) #wyrzuca liczby
+    tokens = nltk.word_tokenize(text)
+    stems = stem_tokens(tokens, stemmer)
+    return stems
+
+vectorizer = CountVectorizer(  #zmiennia na małe litery
+    analyzer = 'word',  #sprawdzamy słowo po słowie
+    tokenizer = tokenize,
+    lowercase = True,
+    # !!! replace the line below with your stopwords list like this
+    # stop_words=POLISH_STOP_WORDS,
+    stop_words = 'english', #nie analizuje
+    max_features = 85  # max słów w zdaniu
+)
+
+corpus_data_features = vectorizer.fit_transform(
+    train_data_df.Text.tolist() + test_data_df.Text.tolist())
+corpus_data_features_nd = corpus_data_features.toarray()
+corpus_data_features_nd.shape
+vocab = vectorizer.get_feature_names()
+dist = np.sum(corpus_data_features_nd, axis=0)
+X_train, X_test, y_train, y_test  = train_test_split(
+        corpus_data_features_nd[0:len(train_data_df)],
+        train_data_df.Type,
+        train_size=0.60,
+        random_state=1234)
+log_model = LogisticRegression()
+log_model = log_model.fit(X=X_train, y=y_train)
+y_pred = log_model.predict(X_test)
+##########STEP 4
+print(vocab) # wyświetla wyrazy o obojętnej emocji
+############# STEP 5
+############# TESTING TRAINING DATASET
+print("Testing the training dataset accuracy...")
+print(classification_report(y_test, y_pred))  #testujemy działanie treningu komputera
+
+############# STEP 6
+############# TESTING THE REAL DATASET
+log_model = LogisticRegression()
+log_model = log_model.fit(X=corpus_data_features_nd[0:len(train_data_df)], y=train_data_df.Type)
+
+test_pred = log_model.predict(corpus_data_features_nd[len(train_data_df):])
+import random
+
+spl = random.sample(range(len(test_pred)), len(test_pred))
+purpose = []
+
+for text, type in zip(test_data_df.Text[spl], test_pred[spl]):
+    print(TypeText[type - 1], ':', text)
+    purpose.append(TypeText[type - 1])
+
+
+print("The following sentiments were identified:\n")
+c = Counter(purpose)
+for letter in c:
+    print('%s: %d' % (letter, c[letter]))  #testujemy działanie testu komputera
